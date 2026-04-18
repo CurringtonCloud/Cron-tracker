@@ -2,13 +2,17 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package.json ./
-RUN npm install --production
+COPY package*.json ./
+RUN npm ci --omit=dev
 
 COPY server.js ./
 COPY static/ ./static/
 
-RUN mkdir -p /data
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
+    && mkdir -p /data \
+    && chown -R appuser:appgroup /app /data
+
+USER appuser
 
 ENV PORT=3000
 ENV DATA_DIR=/data

@@ -209,17 +209,35 @@ const TZLIST = [
 
 let jobs = [];
 let currentDeps = [];
+let apiKey = sessionStorage.getItem('cron-api-key') || '';
 
-async function api(method, path, body) {
-  const r = await fetch(path, {
-    method, headers: { 'Content-Type': 'application/json' },
+function getApiKey() {
+  if (!apiKey) {
+    apiKey = prompt('Enter your API key:') || '';
+    if (apiKey) sessionStorage.setItem('cron-api-key', apiKey);
+  }
+  return apiKey;
+}
+
+async function api(method, url, body) {
+  const key = getApiKey();
+  const r = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'x-api-key': key },
     body: body ? JSON.stringify(body) : undefined
   });
+  if (r.status === 401) {
+    sessionStorage.removeItem('cron-api-key');
+    apiKey = '';
+    alert('Invalid API key. Please reload and try again.');
+    return { error: 'Unauthorized' };
+  }
   return r.json();
 }
 
 async function loadJobs() {
-  jobs = await api('GET', '/api/jobs');
+  const result = await api('GET', '/api/jobs');
+  jobs = Array.isArray(result) ? result : [];
 }
 
 function populateTz() {
