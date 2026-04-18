@@ -10,5 +10,5 @@ steps:
     with:
       push: true
       tags: ghcr.io/${{ github.repository }}:latest
-```.
+
 
