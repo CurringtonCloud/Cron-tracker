@@ -1,0 +1,13 @@
+{
+  "name": "cron-dependency-tracker",
+  "version": "1.0.0",
+  "description": "Cron job dependency tracker with maintenance window finder",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

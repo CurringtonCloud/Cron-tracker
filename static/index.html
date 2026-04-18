@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cron Dependency Tracker</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f9f9f8;
+    --surface: #ffffff;
+    --surface2: #f1f0eb;
+    --border: rgba(0,0,0,0.12);
+    --border-md: rgba(0,0,0,0.22);
+    --text: #1a1a18;
+    --text2: #5f5e5a;
+    --text3: #888780;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --blue-bg: #E6F1FB; --blue-text: #0C447C;
+    --green-bg: #EAF3DE; --green-text: #27500A;
+    --red-bg: #FCEBEB; --red-text: #791F1F;
+    --amber-bg: #FAEEDA; --amber-text: #633806;
+    --info-bg: #E6F1FB; --info-border: #378ADD;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a; --surface: #252523; --surface2: #2e2e2b;
+      --border: rgba(255,255,255,0.1); --border-md: rgba(255,255,255,0.2);
+      --text: #f0ede8; --text2: #a0a09a; --text3: #6a6a64;
+      --blue-bg: #0C447C; --blue-text: #B5D4F4;
+      --green-bg: #173404; --green-text: #C0DD97;
+      --red-bg: #501313; --red-text: #F7C1C1;
+      --amber-bg: #412402; --amber-text: #FAC775;
+    }
+  }
+
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; min-height: 100vh; }
+
+  header { background: var(--surface); border-bottom: 0.5px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 17px; font-weight: 500; }
+  header .sub { font-size: 13px; color: var(--text3); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #1D9E75; flex-shrink: 0; }
+
+  .container { max-width: 800px; margin: 0 auto; padding: 24px 20px; }
+
+  .tabs { display: flex; gap: 4px; background: var(--surface2); border-radius: var(--radius-lg); padding: 4px; margin-bottom: 24px; }
+  .tab { flex: 1; text-align: center; padding: 7px 12px; border-radius: var(--radius-md); font-size: 13px; cursor: pointer; border: none; background: transparent; color: var(--text2); font-family: inherit; transition: background 0.12s; }
+  .tab.active { background: var(--surface); color: var(--text); font-weight: 500; border: 0.5px solid var(--border); }
+
+  .section { display: none; }
+  .section.active { display: block; }
+
+  .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 10px; }
+
+  label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 5px; }
+  input[type=text], select, textarea {
+    width: 100%; padding: 8px 12px; border: 0.5px solid var(--border-md); border-radius: var(--radius-md);
+    background: var(--surface); color: var(--text); font-family: inherit; font-size: 14px;
+    outline: none; transition: border-color 0.15s;
+  }
+  input[type=text]:focus, select:focus { border-color: #378ADD; box-shadow: 0 0 0 3px rgba(55,138,221,0.15); }
+  input.mono { font-family: 'SF Mono', 'Fira Code', monospace; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .form-group { display: flex; flex-direction: column; gap: 12px; }
+
+  button {
+    padding: 8px 18px; border-radius: var(--radius-md); border: 0.5px solid var(--border-md);
+    background: transparent; color: var(--text); font-family: inherit; font-size: 13px;
+    cursor: pointer; transition: background 0.12s, transform 0.08s;
+  }
+  button:hover { background: var(--surface2); }
+  button:active { transform: scale(0.98); }
+  button.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+  button.primary:hover { opacity: 0.88; }
+  button.danger { color: var(--red-text); border-color: transparent; background: transparent; }
+  button.danger:hover { background: var(--red-bg); }
+  button.sm { padding: 5px 12px; font-size: 12px; }
+
+  .tag { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 3px 9px; border-radius: 20px; background: var(--blue-bg); color: var(--blue-text); margin: 2px; }
+  .tag-x { cursor: pointer; font-size: 15px; line-height: 1; opacity: 0.7; }
+  .tag-x:hover { opacity: 1; }
+
+  .cron-hint { font-size: 12px; color: var(--text3); font-family: monospace; margin-top: 4px; min-height: 18px; }
+
+  .job-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .job-name { font-weight: 500; font-size: 15px; }
+  .job-cron { font-family: monospace; font-size: 12px; color: var(--text2); background: var(--surface2); padding: 2px 7px; border-radius: 5px; }
+  .job-meta { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
+
+  .heat-grid { display: flex; flex-wrap: wrap; gap: 3px; margin: 10px 0 6px; }
+  .heat-cell { width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 500; cursor: default; position: relative; }
+  .heat-cell:hover::after { content: attr(title); position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); font-size: 11px; padding: 3px 7px; border-radius: 5px; white-space: nowrap; z-index: 10; pointer-events: none; }
+
+  .legend { display: flex; gap: 14px; font-size: 11px; color: var(--text2); flex-wrap: wrap; margin-top: 6px; }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+
+  .window-pill { display: inline-block; font-size: 12px; padding: 4px 10px; border-radius: 20px; margin: 3px; background: var(--green-bg); color: var(--green-text); font-weight: 500; }
+  .busy-pill { background: var(--red-bg); color: var(--red-text); }
+
+  .result-section { background: var(--surface2); border-radius: var(--radius-lg); padding: 14px 18px; margin-top: 12px; }
+  .result-title { font-size: 13px; font-weight: 500; margin-bottom: 10px; }
+
+  .msg { font-size: 13px; text-align: center; min-height: 20px; padding: 4px 0; }
+  .msg.ok { color: var(--green-text); }
+  .msg.err { color: var(--red-text); }
+
+  .toolbar { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 12px; }
+
+  pre { background: var(--surface2); border-radius: var(--radius-md); padding: 14px; font-size: 12px; font-family: monospace; color: var(--text); overflow-x: auto; white-space: pre-wrap; word-break: break-all; margin-top: 10px; }
+
+  .search-row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 16px; }
+  .search-row > div:first-child { flex: 1; }
+
+  .empty { text-align: center; padding: 2.5rem; color: var(--text3); font-size: 14px; }
+
+  @media (max-width: 600px) {
+    .grid2, .grid3 { grid-template-columns: 1fr; }
+    .search-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="dot"></div>
+  <div>
+    <h1>Cron Dependency Tracker</h1>
+    <div class="sub">Map job dependencies · Find safe maintenance windows</div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('register',this)">Register job</button>
+    <button class="tab" onclick="showTab('jobs',this)">All jobs</button>
+    <button class="tab" onclick="showTab('maintenance',this)">Maintenance finder</button>
+  </div>
+
+  <div id="sec-register" class="section active">
+    <div class="card">
+      <div class="form-group">
+        <div class="grid2">
+          <div>
+            <label>Job name</label>
+            <input type="text" id="job-name" placeholder="e.g. nightly-report" />
+          </div>
+          <div>
+            <label>Timezone</label>
+            <select id="job-tz"></select>
+          </div>
+        </div>
+        <div>
+          <label>Cron expression</label>
+          <input type="text" id="job-cron" class="mono" placeholder="e.g. 0 2 * * *" oninput="previewCron()" />
+          <div class="cron-hint" id="cron-preview">Enter a cron expression above</div>
+        </div>
+        <div>
+          <label>Dependencies — type and press Enter</label>
+          <input type="text" id="dep-input" placeholder="e.g. postgres, redis, s3..." onkeydown="addDep(event)" />
+          <div id="dep-tags" style="margin-top:8px;display:flex;flex-wrap:wrap;"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button class="primary" onclick="registerJob()" style="flex:1;padding:10px;">Register job</button>
+        </div>
+        <div id="reg-msg" class="msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sec-jobs" class="section">
+    <div class="toolbar">
+      <button class="sm" onclick="exportFmt('json')">Export JSON</button>
+      <button class="sm" onclick="exportFmt('yaml')">Export YAML</button>
+    </div>
+    <div id="jobs-list"></div>
+    <div id="jobs-empty" class="empty">No jobs registered yet.</div>
+    <div id="export-out"></div>
+  </div>
+
+  <div id="sec-maintenance" class="section">
+    <div class="search-row">
+      <div>
+        <label>Search by dependency name</label>
+        <input type="text" id="dep-search" placeholder="e.g. postgres" oninput="runSearch()" />
+      </div>
+      <div>
+        <label>View timezone</label>
+        <select id="search-tz" onchange="runSearch()" style="width:190px;"></select>
+      </div>
+    </div>
+    <div id="search-results"></div>
+    <div id="search-empty" class="empty">Type a dependency name to find maintenance windows.</div>
+  </div>
+</div>
+
+<script>
+const TZLIST = [
+  'UTC','America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
+  'America/Sao_Paulo','Europe/London','Europe/Paris','Europe/Berlin','Europe/Moscow',
+  'Asia/Dubai','Asia/Kolkata','Asia/Bangkok','Asia/Shanghai','Asia/Tokyo',
+  'Australia/Sydney','Pacific/Auckland'
+];
+
+let jobs = [];
+let currentDeps = [];
+
+async function api(method, path, body) {
+  const r = await fetch(path, {
+    method, headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  return r.json();
+}
+
+async function loadJobs() {
+  jobs = await api('GET', '/api/jobs');
+}
+
+function populateTz() {
+  const html = TZLIST.map(t => `<option value="${t}">${t}</option>`).join('');
+  document.getElementById('job-tz').innerHTML = html;
+  document.getElementById('search-tz').innerHTML = html;
+}
+
+function showTab(name, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('sec-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'jobs') renderJobs();
+  if (name === 'maintenance') { document.getElementById('search-empty').style.display = 'block'; runSearch(); }
+}
+
+function parseCron(expr) {
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length !== 5) return null;
+  const [min, hour, dom, month, dow] = parts;
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let desc = '';
+  const isAll = v => v === '*';
+  const isStep = v => v.includes('/');
+  if (isStep(min)) desc = `Every ${min.split('/')[1]} min`;
+  else if (isAll(min) && isAll(hour)) desc = 'Every minute';
+  else {
+    const h = isAll(hour) ? 'every hour' : `${String(hour).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
+    if (!isAll(dow)) desc = `At ${h} on ${dow.split(',').map(d => days[+d]||d).join(', ')}`;
+    else if (!isAll(dom)) desc = `At ${h} on day ${dom} of month`;
+    else desc = isAll(hour) ? `Every hour at :${String(min).padStart(2,'0')}` : `Daily at ${h}`;
+  }
+  return { desc, parts };
+}
+
+function previewCron() {
+  const val = document.getElementById('job-cron').value;
+  const p = parseCron(val);
+  document.getElementById('cron-preview').textContent = p ? p.desc : (val.trim() ? 'Invalid expression' : 'Enter a cron expression above');
+}
+
+function addDep(e) {
+  if (e.key !== 'Enter') return;
+  const input = document.getElementById('dep-input');
+  const val = input.value.trim().toLowerCase();
+  if (!val || currentDeps.includes(val)) { input.value = ''; return; }
+  currentDeps.push(val);
+  input.value = '';
+  renderDepTags();
+}
+
+function removeDep(dep) { currentDeps = currentDeps.filter(d => d !== dep); renderDepTags(); }
+function renderDepTags() {
+  document.getElementById('dep-tags').innerHTML = currentDeps.map(d =>
+    `<span class="tag">${d}<span class="tag-x" onclick="removeDep('${d}')">×</span></span>`
+  ).join('');
+}
+
+async function registerJob() {
+  const name = document.getElementById('job-name').value.trim();
+  const cron = document.getElementById('job-cron').value.trim();
+  const tz = document.getElementById('job-tz').value;
+  const msg = document.getElementById('reg-msg');
+  if (!name) return setMsg(msg, 'err', 'Please enter a job name.');
+  if (!parseCron(cron)) return setMsg(msg, 'err', 'Invalid cron expression.');
+  if (!currentDeps.length) return setMsg(msg, 'err', 'Add at least one dependency.');
+  const job = await api('POST', '/api/jobs', { name, cron, tz, deps: [...currentDeps] });
+  if (job.error) return setMsg(msg, 'err', job.error);
+  jobs.push(job);
+  document.getElementById('job-name').value = '';
+  document.getElementById('job-cron').value = '';
+  document.getElementById('cron-preview').textContent = 'Enter a cron expression above';
+  currentDeps = []; renderDepTags();
+  setMsg(msg, 'ok', 'Job registered and saved!');
+  setTimeout(() => msg.textContent = '', 2500);
+}
+
+function setMsg(el, type, txt) { el.className = 'msg ' + type; el.textContent = txt; }
+
+function renderJobs() {
+  const list = document.getElementById('jobs-list');
+  const empty = document.getElementById('jobs-empty');
+  document.getElementById('export-out').innerHTML = '';
+  if (!jobs.length) { list.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  list.innerHTML = jobs.map(j => {
+    const p = parseCron(j.cron);
+    return `<div class="card">
+      <div class="job-header">
+        <div>
+          <div class="job-name">${j.name}</div>
+          <div class="job-meta">${p ? p.desc : ''} &nbsp;·&nbsp; ${j.tz || 'UTC'}</div>
+        </div>
+        <span class="job-cron">${j.cron}</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;">
+        <div>${j.deps.map(d => `<span class="tag">${d}</span>`).join('')}</div>
+        <button class="sm danger" onclick="deleteJob(${j.id})">Remove</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function deleteJob(id) {
+  await api('DELETE', '/api/jobs/' + id);
+  jobs = jobs.filter(j => j.id !== id);
+  renderJobs();
+}
+
+function exportFmt(fmt) {
+  let txt = '';
+  if (fmt === 'json') {
+    txt = JSON.stringify(jobs, null, 2);
+  } else {
+    const lines = ['jobs:'];
+    jobs.forEach(j => {
+      lines.push(`  - id: ${j.id}`);
+      lines.push(`    name: "${j.name}"`);
+      lines.push(`    cron: "${j.cron}"`);
+      lines.push(`    timezone: "${j.tz || 'UTC'}"`);
+      lines.push(`    dependencies:`);
+      j.deps.forEach(d => lines.push(`      - ${d}`));
+    });
+    txt = lines.join('\n');
+  }
+  const out = document.getElementById('export-out');
+  out.innerHTML = `<pre id="export-pre">${esc(txt)}</pre>
+    <button class="sm" onclick="copyExport()" style="margin-top:6px;">Copy ${fmt.toUpperCase()}</button>`;
+}
+
+function copyExport() { navigator.clipboard.writeText(document.getElementById('export-pre').textContent).catch(() => {}); }
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function tzOffset(tz) {
+  try {
+    const now = new Date();
+    const u = +now.toLocaleString('en-US',{timeZone:'UTC',hour:'numeric',hour12:false});
+    const t = +now.toLocaleString('en-US',{timeZone:tz,hour:'numeric',hour12:false});
+    return (t - u + 24) % 24;
+  } catch { return 0; }
+}
+
+function getBusyHours(job, viewTz) {
+  const parts = job.cron.trim().split(/\s+/);
+  if (parts.length !== 5) return new Set();
+  const [min, hour] = parts;
+  const busy = new Set();
+  const shift = (tzOffset(viewTz) - tzOffset(job.tz || 'UTC') + 24) % 24;
+  if (min.startsWith('*/') || hour === '*') { for (let h = 0; h < 24; h++) busy.add(h); }
+  else if (!isNaN(+hour)) busy.add((+hour + shift) % 24);
+  return busy;
+}
+
+function runSearch() {
+  const dep = document.getElementById('dep-search').value.trim().toLowerCase();
+  const viewTz = document.getElementById('search-tz').value || 'UTC';
+  const results = document.getElementById('search-results');
+  const empty = document.getElementById('search-empty');
+  if (!dep) { results.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+
+  const matching = jobs.filter(j => j.deps.map(d => d.toLowerCase()).includes(dep));
+  if (!matching.length) { results.innerHTML = `<div class="empty">No jobs depend on <strong>${dep}</strong>.</div>`; return; }
+
+  const load = new Array(24).fill(0);
+  matching.forEach(j => getBusyHours(j, viewTz).forEach(h => load[h]++));
+  const maxLoad = Math.max(...load, 1);
+  const safeHours = load.map((v, i) => v === 0 ? i : -1).filter(i => i >= 0);
+
+  const cells = load.map((v, h) => {
+    const pct = v / maxLoad;
+    let bg, fg;
+    if (v === 0) { bg = '#EAF3DE'; fg = '#27500A'; }
+    else if (pct < 0.5) { bg = '#FAEEDA'; fg = '#633806'; }
+    else { bg = `rgb(${Math.round(226+pct*26)},${Math.round(75-pct*49)},${Math.round(75-pct*49)})`; fg = '#791F1F'; }
+    return `<div class="heat-cell" style="background:${bg};color:${fg};" title="${String(h).padStart(2,'0')}:00 — ${v} job${v!==1?'s':''}">${String(h).padStart(2,'0')}</div>`;
+  }).join('');
+
+  let windows = '';
+  if (!safeHours.length) {
+    windows = `<span class="window-pill busy-pill">No clear windows — jobs run every hour</span>`;
+  } else {
+    const groups = []; let s = safeHours[0], p = safeHours[0];
+    for (let i = 1; i <= safeHours.length; i++) {
+      if (safeHours[i] === p + 1) { p = safeHours[i]; }
+      else { groups.push([s, p]); s = safeHours[i]; p = safeHours[i]; }
+    }
+    windows = groups.map(([a, b]) => `<span class="window-pill">${String(a).padStart(2,'0')}:00${a!==b?'–'+String(b+1).padStart(2,'0')+':00':''}</span>`).join('');
+  }
+
+  results.innerHTML = `
+    <div style="font-size:13px;color:var(--text2);margin-bottom:10px;">
+      <strong style="color:var(--text);">${matching.length}</strong> job${matching.length!==1?'s':''} depend on
+      <strong style="color:var(--text);">${dep}</strong> · displayed in <strong style="color:var(--text);">${viewTz}</strong>
+    </div>
+    ${matching.map(j => { const p = parseCron(j.cron); return `
+      <div class="card" style="margin-bottom:8px;">
+        <div class="job-header">
+          <div><div class="job-name">${j.name}</div><div class="job-meta">${p?p.desc:''} · ${j.tz||'UTC'}</div></div>
+          <span class="job-cron">${j.cron}</span>
+        </div>
+        <div>${j.deps.map(d=>`<span class="tag">${d}</span>`).join('')}</div>
+      </div>`; }).join('')}
+    <div class="result-section">
+      <div class="result-title">24-hour activity heatmap (${viewTz})</div>
+      <div class="heat-grid">${cells}</div>
+      <div class="legend">
+        <span><span class="legend-dot" style="background:#EAF3DE;"></span>No jobs</span>
+        <span><span class="legend-dot" style="background:#FAEEDA;"></span>Some activity</span>
+        <span><span class="legend-dot" style="background:#E24B4A;"></span>Peak activity</span>
+      </div>
+    </div>
+    <div class="result-section" style="margin-top:10px;">
+      <div class="result-title">Suggested maintenance windows</div>
+      <div style="display:flex;flex-wrap:wrap;">${windows}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:8px;">Hours with zero scheduled runs across all dependent jobs, in ${viewTz}.</div>
+    </div>`;
+}
+
+async function init() {
+  populateTz();
+  await loadJobs();
+  document.getElementById('search-empty').style.display = 'block';
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+services:
+  cron-tracker:
+    build: .
+    container_name: cron-tracker
+    ports:
+      - "3000:3000"
+    volumes:
+      - cron-data:/data
+    environment:
+      - PORT=3000
+      - DATA_DIR=/data
+    restart: unless-stopped
+
+volumes:
+  cron-data:
+    driver: local
