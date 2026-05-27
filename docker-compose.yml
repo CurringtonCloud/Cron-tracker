@@ -3,7 +3,7 @@ services:
     build: .
     container_name: cron-tracker
     ports:
-      - "127.0.0.1:3000:3000"
+      - "3003:3000"
     volumes:
       - cron-data:/data
     environment:
